@@ -47,10 +47,10 @@ exports.register = async (req, res) => {
 
 // Login user
 exports.login = async (req, res) => {
-  const { email, password } = req.body;
+  const { name, password } = req.body;
 
   try {
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ name });
     if (!user) return res.status(400).json({ message: 'Invalid credentials' });
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
@@ -77,14 +77,16 @@ exports.login = async (req, res) => {
 };
 
 // Refresh access token
-exports.refreshAccessToken = (req, res) => {
+exports.refreshAccessToken = async(req, res) => {
   const token = req.cookies.refreshToken;
   if (!token) return res.sendStatus(401); // Unauthorized
-
+  
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId).select('name');
     const accessToken = generateAccessToken(decoded.userId);
-    res.json({ accessToken });
+    res.json({ accessToken,
+      user: { id: user._id, name: user.name }, });
   } catch (err) {
     return res.sendStatus(403); // Forbidden
   }
@@ -98,4 +100,14 @@ exports.logoutUser = (req, res) => {
     sameSite: 'strict',
   });
   res.status(200).json({ message: 'Logged out successfully' });
+};
+
+exports.deleteUser = async(req, res) => {
+  const user = await User.findByIdAndDelete(req.userId )
+  res.clearCookie('refreshToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+  });
+  res.status(200).json({ message: 'User deleted successfully' });
 };

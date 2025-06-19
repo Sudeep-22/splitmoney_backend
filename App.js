@@ -12,7 +12,7 @@ const cookieParser = require('cookie-parser');
 // Add this before your routes
 app.use(cookieParser());
 app.use(cors({
-  origin: 'http://localhost:3000', // Your frontend URL
+  origin: 'http://localhost:5173', // Your frontend URL
   credentials: true,
 }));
 
