@@ -111,3 +111,12 @@ exports.deleteUser = async(req, res) => {
   });
   res.status(200).json({ message: 'User deleted successfully' });
 };
+
+exports.fetchAllUsers = async(req, res) => {
+  try {
+    const users = await User.find().select('name');
+    res.status(200).json({ users }); // e.g., [{ _id: ..., name: 'Sudeep' }, ...]
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
