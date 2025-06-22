@@ -16,6 +16,23 @@ exports.fetchGroup = async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 };
+
+exports.fetchMembers = async (req, res) => {
+  try {
+    const { groupId } = req.body;
+    const usersInGroup = await GroupUser.find({ group: groupId })
+    .populate('user', 'name');
+
+  const userDetails = usersInGroup
+     .map(entry => entry.user?.name)
+      .filter(name => !!name);
+
+  res.status(200).json(userDetails);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
 exports.createNewGroup = async (req, res) => {
   const { title, description } = req.body;
 
@@ -41,7 +58,6 @@ exports.addMember = async (req, res) => {
   const { name, groupId} = req.body;
 
   try {
-
     let user = await User.findOne({ name });
     let group = await Group.findById(groupId);
     if (!user || !group){
@@ -63,17 +79,31 @@ exports.addMember = async (req, res) => {
 
 
 exports.exitFromGroup = async (req, res) => {
-  const { groupTitle } = req.body;
+  const { groupId } = req.body;
+
+  // Defensive check
+  if (!groupId) {
+    return res.status(400).json({ message: "Group ID is required" });
+  }
 
   try {
-    let group = await Group.findOne({ title: groupTitle });
-    if (!group) return res.status(404).json({ message: 'Group not found' });
-    
-    await GroupUser.findOneAndDelete({user: req.userId, group: group._id});
-    res.status(201).json({
+  
+    const deleted = await GroupUser.findOneAndDelete({
+      user: req.userId,
+      group: groupId
+    });
+
+    if (!deleted) {
+      return res.status(404).json({
+        message: "You are not part of this group or group does not exist",
+      });
+    }
+
+    return res.status(200).json({
       message: "Exited successfully",
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("Error while exiting group:", err.message);
+    return res.status(500).json({ message: err.message });
   }
 };
