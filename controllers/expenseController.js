@@ -4,33 +4,50 @@ const User = require('../models/User');
 const Group = require('../models/Group');
 const GroupUser = require('../models/GroupUser');
 const Expense = require('../models/Expense');
+const ExpenseIndiviualMap = require('../models/ExpenseIndivisualMap');
+const IndiviualContribution = require('../models/IndivisualExpenseContribution');
 
-exports.addExpense = async (req, res) => {
-  const { groupId, title, amount, paidByName} = req.body;
+exports.addExpenseContribution = async (req, res) => {
+  const { groupId, expense, contributions } = req.body;
 
   try {
-    let paidBy = await User.findOne({ name: paidByName });
-     if (!paidBy){
-       return res.status(404).json({ message: 'Payer not found' });
-     }
+    // 1. Check group exists
+    const group = await Group.findById(groupId);
+    if (!group) return res.status(404).json({ message: 'Group not found' });
 
-    const toAddExpense = new Expense({group: groupId ,title,amount,paidBy: paidBy._id});
-    await toAddExpense.save();
-
-    res.status(201).json({
-      message: "Expense has been added",
+    // 2. Create the Expense
+    const newExpense = new Expense({
+      group: groupId,
+      title: expense.title,
+      amount: expense.amount,
+      paidBy: expense.paidById 
     });
+
+    await newExpense.save();
+
+    // 3. Loop through each contribution and save
+    for (const entry of contributions) {
+      const indivContri = new IndiviualContribution({
+        expense: newExpense._id,
+        paidByUser: expense.paidById ,
+        paidToUser: entry.paidToUserId,
+        amount: entry.amount
+      });
+
+      await indivContri.save();
+    }
+
+    res.status(201).json({ message: "Expense and contributions added successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 };
 
 
-exports.fetchExpenses = async (req, res) => {
+exports.fetchAllExpense = async (req, res) => {
   const { groupId } = req.body;
 
   try {
-    // Check if group exists
     const group = await Group.findById(groupId);
     if (!group) return res.status(404).json({ message: 'Group not found' });
 

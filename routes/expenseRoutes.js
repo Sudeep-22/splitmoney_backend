@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const {  addExpense, fetchExpense } = require('../controllers/groupController');
+const { addExpenseContribution, fetchAllExpense } = require('../controllers/expenseController');
 const authMiddleware = require('../middlewares/authMiddleware');
 
-router.post('/addExpense', authMiddleware, addExpense);
-router.post('/fetchExpense', authMiddleware, fetchExpense);
+router.post('/addExpense', authMiddleware, addExpenseContribution);
+router.post('/fetchAllExpense', authMiddleware, fetchAllExpense);
+
+module.exports = router;

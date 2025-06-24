@@ -24,8 +24,11 @@ exports.fetchMembers = async (req, res) => {
     .populate('user', 'name');
 
   const userDetails = usersInGroup
-     .map(entry => entry.user?.name)
-      .filter(name => !!name);
+      .filter(entry => entry.user) // ensure user is populated
+      .map(entry => ({
+        _id: entry.user._id,
+        name: entry.user.name
+      }));
 
   res.status(200).json(userDetails);
   } catch (err) {

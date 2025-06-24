@@ -20,6 +20,7 @@ app.use(express.json());
 
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/group', require('./routes/groupRoutes'));
+app.use('/api/expense', require('./routes/expenseRoutes'));
 
 const startServer = async () => {
   try {
