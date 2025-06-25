@@ -6,7 +6,7 @@ const authMiddleware = require('../middlewares/authMiddleware');
 router.post('/createGroup',authMiddleware, createNewGroup);
 router.post('/addMember', authMiddleware, addMember);
 router.post('/exitGroup', authMiddleware, exitFromGroup);
-router.post('/fetchGroup', authMiddleware, fetchGroup);
+router.post('/fetchGroup', authMiddleware, fetchGroup); 
 router.post('/fetchMembers', authMiddleware, fetchMembers);
 
 module.exports = router;

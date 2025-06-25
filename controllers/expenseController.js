@@ -28,6 +28,7 @@ exports.addExpenseContribution = async (req, res) => {
     // 3. Loop through each contribution and save
     for (const entry of contributions) {
       const indivContri = new IndiviualContribution({
+        group: groupId,
         expense: newExpense._id,
         paidByUser: expense.paidById ,
         paidToUser: entry.paidToUserId,
@@ -65,6 +66,59 @@ exports.fetchAllExpense = async (req, res) => {
 
     res.status(200).json({ expenses: formattedExpenses });
   } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.fetchMemberContri = async (req, res) => {
+  const { groupId } = req.body;
+  const userId = req.userId;
+
+  try {
+    // 1. Verify group exists
+    const group = await Group.findById(groupId);
+    if (!group) return res.status(404).json({ message: 'Group not found' });
+
+    // 2. Get all users in group
+    const groupUsers = await GroupUser.find({ group: groupId }).populate('user', 'name');
+    const otherMembers = groupUsers
+      .map(entry => entry.user)
+      .filter(user => user && user._id.toString() !== userId);
+
+    // 3. Initialize net balance map with all members (default 0)
+    const netBalances = {};
+    otherMembers.forEach(member => {
+      netBalances[member._id.toString()] = 0;
+    });
+
+    // 4. Fetch all contributions in this group
+    const contributions = await IndiviualContribution.find({ group: groupId });
+
+    // 5. Calculate net balances
+    contributions.forEach(entry => {
+      const paidBy = entry.paidByUser.toString();
+      const paidTo = entry.paidToUser.toString();
+      const amount = entry.amount;
+
+      if (paidBy === userId && paidTo !== userId) {
+        // User paid for another member
+        netBalances[paidTo] = (netBalances[paidTo] || 0) + amount;
+      } else if (paidTo === userId && paidBy !== userId) {
+        // Member paid for the user
+        netBalances[paidBy] = (netBalances[paidBy] || 0) - amount;
+      }
+    });
+
+    // 6. Build response: array of { memberId, memberName, netAmount }
+    const result = otherMembers.map(member => ({
+      memberId: member._id,
+      memberName: member.name,
+      netAmount: netBalances[member._id.toString()] || 0
+    }));
+
+    res.status(200).json({ memberContributions: result });
+  } catch (err) {
+    console.error('❌ Error in fetchMemberContri:', err.message);
     res.status(500).json({ message: err.message });
   }
 };

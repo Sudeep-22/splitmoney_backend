@@ -17,6 +17,7 @@ exports.fetchGroup = async (req, res) => {
   }
 };
 
+
 exports.fetchMembers = async (req, res) => {
   try {
     const { groupId } = req.body;
