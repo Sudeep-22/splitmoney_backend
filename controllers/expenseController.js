@@ -20,7 +20,7 @@ exports.addExpenseContribution = async (req, res) => {
       group: groupId,
       title: expense.title,
       amount: expense.amount,
-      paidBy: expense.paidById 
+      paidBy: expense.paidById,
     });
 
     await newExpense.save();
@@ -30,7 +30,7 @@ exports.addExpenseContribution = async (req, res) => {
       const indivContri = new IndiviualContribution({
         group: groupId,
         expense: newExpense._id,
-        paidByUser: expense.paidById ,
+        paidByUser: expense.paidById,
         paidToUser: entry.paidToUserId,
         amount: entry.amount
       });
@@ -59,6 +59,7 @@ exports.fetchAllExpense = async (req, res) => {
 
     // Format the result to send only required fields
     const formattedExpenses = expenses.map(exp => ({
+      id: exp._id, 
       title: exp.title,
       amount: exp.amount,
       paidByName: exp.paidBy.name,
@@ -122,3 +123,4 @@ exports.fetchMemberContri = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
