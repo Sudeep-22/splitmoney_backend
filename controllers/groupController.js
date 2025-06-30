@@ -91,7 +91,6 @@ exports.exitFromGroup = async (req, res) => {
   }
 
   try {
-  
     const deleted = await GroupUser.findOneAndDelete({
       user: req.userId,
       group: groupId

@@ -1,11 +1,6 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
 const Group = require('../models/Group');
-const GroupUser = require('../models/GroupUser');
 const Expense = require('../models/Expense');
-const ExpenseIndiviualMap = require('../models/ExpenseIndivisualMap');
-const IndiviualContribution = require('../models/IndivisualExpenseContribution');
+const IndivisualContribution = require('../models/IndivisualExpenseContribution');
 
 exports.addExpenseContribution = async (req, res) => {
   const { groupId, expense, contributions } = req.body;
@@ -27,7 +22,7 @@ exports.addExpenseContribution = async (req, res) => {
 
     // 3. Loop through each contribution and save
     for (const entry of contributions) {
-      const indivContri = new IndiviualContribution({
+      const indivContri = new IndivisualContribution({
         group: groupId,
         expense: newExpense._id,
         paidByUser: expense.paidById,
@@ -62,7 +57,7 @@ exports.fetchAllExpense = async (req, res) => {
       id: exp._id, 
       title: exp.title,
       amount: exp.amount,
-      paidByName: exp.paidBy.name,
+      paidByName: exp.paidBy?.name || "Deleted User",
     }));
 
     res.status(200).json({ expenses: formattedExpenses });
@@ -80,47 +75,110 @@ exports.fetchMemberContri = async (req, res) => {
     const group = await Group.findById(groupId);
     if (!group) return res.status(404).json({ message: 'Group not found' });
 
-    // 2. Get all users in group
-    const groupUsers = await GroupUser.find({ group: groupId }).populate('user', 'name');
-    const otherMembers = groupUsers
-      .map(entry => entry.user)
-      .filter(user => user && user._id.toString() !== userId);
+    // 2. Fetch all contributions in this group
+    const contributions = await IndivisualContribution.find({ group: groupId })
+      .populate('paidToUser', 'name')
+      .populate('paidByUser', 'name');
 
-    // 3. Initialize net balance map with all members (default 0)
+    // 3. Track net balances for all other users
     const netBalances = {};
-    otherMembers.forEach(member => {
-      netBalances[member._id.toString()] = 0;
-    });
 
-    // 4. Fetch all contributions in this group
-    const contributions = await IndiviualContribution.find({ group: groupId });
-
-    // 5. Calculate net balances
     contributions.forEach(entry => {
-      const paidBy = entry.paidByUser.toString();
-      const paidTo = entry.paidToUser.toString();
+      const paidById = entry.paidByUser?._id?.toString() || null;
+      const paidByName = entry.paidByUser?.name || 'Deleted User';
+      const paidToId = entry.paidToUser?._id?.toString() || null;
+      const paidToName = entry.paidToUser?.name || 'Deleted User';
+
       const amount = entry.amount;
 
-      if (paidBy === userId && paidTo !== userId) {
-        // User paid for another member
-        netBalances[paidTo] = (netBalances[paidTo] || 0) + amount;
-      } else if (paidTo === userId && paidBy !== userId) {
-        // Member paid for the user
-        netBalances[paidBy] = (netBalances[paidBy] || 0) - amount;
+      // User paid for someone
+      if (paidById === userId && paidToId !== userId) {
+        netBalances[paidToId] = netBalances[paidToId] || {
+          memberId: paidToId,
+          memberName: paidToName,
+          netAmount: 0,
+        };
+        netBalances[paidToId].netAmount += amount;
+      }
+
+      // Someone paid for user
+      if (paidToId === userId && paidById !== userId) {
+        netBalances[paidById] = netBalances[paidById] || {
+          memberId: paidById,
+          memberName: paidByName,
+          netAmount: 0,
+        };
+        netBalances[paidById].netAmount -= amount;
       }
     });
 
-    // 6. Build response: array of { memberId, memberName, netAmount }
-    const result = otherMembers.map(member => ({
-      memberId: member._id,
-      memberName: member.name,
-      netAmount: netBalances[member._id.toString()] || 0
-    }));
+    const result = Object.values(netBalances);
 
     res.status(200).json({ memberContributions: result });
   } catch (err) {
-    console.error('❌ Error in fetchMemberContri:', err.message);
+    console.error('Error in fetchMemberContri:', err.message);
     res.status(500).json({ message: err.message });
   }
 };
 
+exports.fetchExpenseContri = async (req, res) => {
+  const { expenseId } = req.body;
+
+  try {
+    const expense = await Expense.findById(expenseId).populate('paidBy', 'name');
+    if (!expense) return res.status(404).json({ message: 'Expense not found' });
+
+    const contributions = await IndivisualContribution.find({ expense: expenseId })
+      .populate('paidToUser', 'name')
+      .populate('paidByUser', 'name');
+
+    const formatted = contributions.map((entry) => ({
+      id: entry._id,
+      paidToUser: {
+        id: entry.paidToUser?._id || null,
+        name: entry.paidToUser?.name || "Deleted User",
+      },
+      paidByUser: {
+        id: entry.paidByUser?._id || null,
+        name: entry.paidByUser?.name || "Deleted User",
+      },
+      amount: entry.amount,
+    }));
+
+    res.status(200).json({
+      expenseId: expense._id,
+      title: expense.title,
+      totalAmount: expense.amount,
+      paidByUser: {
+        id: expense.paidBy?._id || null,
+        name: expense.paidBy?.name || "Deleted User",
+      },
+      contributions: formatted,
+    });
+  } catch (err) {
+    console.error('Error in fetchExpenseContri:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.deleteExpense = async (req, res) => {
+  const { expenseId } = req.body;
+
+  try {
+    const individualContriIds = await IndivisualContribution.find({ expense: expenseId });
+
+    await Promise.all(
+      individualContriIds.map(entry =>
+        IndivisualContribution.findByIdAndDelete(entry._id)
+      )
+    );
+
+    await Expense.findByIdAndDelete(expenseId);
+
+    res.status(200).json({ message: "Expense has been deleted" });
+
+  } catch (err) {
+    console.error('Error in deleteExpense:', err.message);
+    res.status(500).json({ message: err.message });
+  }
+};

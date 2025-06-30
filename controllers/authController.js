@@ -1,6 +1,8 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const IndivisualExpenseContribution = require('../models/IndivisualExpenseContribution');
+const Expense = require('../models/Expense');
 
 // Helper functions
 const generateAccessToken = (userId) => {
@@ -79,8 +81,9 @@ exports.login = async (req, res) => {
 // Refresh access token
 exports.refreshAccessToken = async(req, res) => {
   const token = req.cookies.refreshToken;
-  if (!token) return res.sendStatus(401); // Unauthorized
-  
+   if (!token) {
+    return res.status(401).json({ message: 'No refresh token found' }); // ✅ Return JSON
+  } // Unauthorized
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId).select('name');
@@ -88,7 +91,7 @@ exports.refreshAccessToken = async(req, res) => {
     res.json({ accessToken,
       user: { id: user._id, name: user.name }, });
   } catch (err) {
-    return res.sendStatus(403); // Forbidden
+    return res.sendStatus(403).json({ message: 'Invalid or expired refresh token' }); // Forbidden
   }
 };
 
@@ -102,31 +105,48 @@ exports.logoutUser = (req, res) => {
   res.status(200).json({ message: 'Logged out successfully' });
 };
 
-exports.deleteUser = async(req, res) => {
-  const user = await User.findByIdAndDelete(req.userId )
-  res.clearCookie('refreshToken', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-  });
-  res.status(200).json({ message: 'User deleted successfully' });
+exports.deleteUser = async (req, res) => {
+  const userId = req.userId;
+
+  try {
+    // 1. Nullify user references in contributions
+    await IndivisualExpenseContribution.updateMany(
+      { paidByUser: userId },
+      { $set: { paidByUser: null } }
+    );
+
+    await IndivisualExpenseContribution.updateMany(
+      { paidToUser: userId },
+      { $set: { paidToUser: null } }
+    );
+
+    // 2. Nullify references in expenses
+    await Expense.updateMany(
+      { paidBy: userId },
+      { $set: { paidBy: null } }
+    );
+
+    // 3. Delete the user
+    await User.findByIdAndDelete(userId);
+
+    // 4. Clear cookie and respond
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+    });
+
+    res.status(200).json({ message: 'User deleted successfully and references nullified' });
+  } catch (err) {
+    console.error('Error in deleteUser:', err.message);
+    res.status(500).json({ message: err.message });
+  }
 };
 
 exports.fetchAllUsers = async(req, res) => {
   try {
     const users = await User.find().select('name');
     res.status(200).json({ users }); // e.g., [{ _id: ..., name: 'Sudeep' }, ...]
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-exports.fetchUser = async(req, res) => {
-  try {
-    const user = await User.findById(req.userId);
-    if (!user) return res.status(404).json({ message: 'User not found' });
-
-    res.status(200).json({ id: user._id, name: user.name });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
