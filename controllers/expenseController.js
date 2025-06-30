@@ -1,6 +1,7 @@
 const Group = require('../models/Group');
 const Expense = require('../models/Expense');
 const IndivisualContribution = require('../models/IndivisualExpenseContribution');
+const GroupUser = require('../models/GroupUser');
 
 exports.addExpenseContribution = async (req, res) => {
   const { groupId, expense, contributions } = req.body;
@@ -54,7 +55,7 @@ exports.fetchAllExpense = async (req, res) => {
 
     // Format the result to send only required fields
     const formattedExpenses = expenses.map(exp => ({
-      id: exp._id, 
+      id: exp._id,
       title: exp.title,
       amount: exp.amount,
       paidByName: exp.paidBy?.name || "Deleted User",
@@ -75,48 +76,78 @@ exports.fetchMemberContri = async (req, res) => {
     const group = await Group.findById(groupId);
     if (!group) return res.status(404).json({ message: 'Group not found' });
 
-    // 2. Fetch all contributions in this group
+    // 2. Get all members in the group (excluding self)
+    const groupUserLinks = await GroupUser.find({ group: groupId }).populate('user', 'name');
+    const members = groupUserLinks
+      .filter(link => link.user._id.toString() !== userId)
+      .map(link => ({
+        memberId: link.user._id.toString(),
+        memberName: link.user.name,
+      }));
+
+    // 3. Fetch all contributions in the group
     const contributions = await IndivisualContribution.find({ group: groupId })
-      .populate('paidToUser', 'name')
-      .populate('paidByUser', 'name');
+      .populate('paidByUser', 'name')
+      .populate('paidToUser', 'name');
 
-    // 3. Track net balances for all other users
-    const netBalances = {};
+    const netBalances = {}; // key = memberId
+    let myNetTotal = 0;
 
-    contributions.forEach(entry => {
-      const paidById = entry.paidByUser?._id?.toString() || null;
+    // 4. Loop through contributions
+    for (const entry of contributions) {
+      const paidById = entry.paidByUser?._id?.toString();
       const paidByName = entry.paidByUser?.name || 'Deleted User';
-      const paidToId = entry.paidToUser?._id?.toString() || null;
+
+      const paidToId = entry.paidToUser?._id?.toString();
       const paidToName = entry.paidToUser?.name || 'Deleted User';
 
       const amount = entry.amount;
 
-      // User paid for someone
-      if (paidById === userId && paidToId !== userId) {
-        netBalances[paidToId] = netBalances[paidToId] || {
-          memberId: paidToId,
-          memberName: paidToName,
-          netAmount: 0,
-        };
-        netBalances[paidToId].netAmount += amount;
-      }
+      if (!paidById || !paidToId || paidById === paidToId) continue;
 
-      // Someone paid for user
-      if (paidToId === userId && paidById !== userId) {
-        netBalances[paidById] = netBalances[paidById] || {
-          memberId: paidById,
-          memberName: paidByName,
+      if (paidById === userId && paidToId !== userId) {
+  // You paid for them → They owe you money
+  netBalances[paidToId] = netBalances[paidToId] || {
+    memberId: paidToId,
+    memberName: paidToName,
+    netAmount: 0,
+  };
+  netBalances[paidToId].netAmount += amount; // ✅ Should be +
+  myNetTotal += amount;
+}
+
+if (paidToId === userId && paidById !== userId) {
+  // They paid for you → You owe them money
+  netBalances[paidById] = netBalances[paidById] || {
+    memberId: paidById,
+    memberName: paidByName,
+    netAmount: 0,
+  };
+  netBalances[paidById].netAmount -= amount; // ✅ Should be -
+  myNetTotal -= amount;
+}
+    }
+
+    // 5. Ensure all members (excluding self) are shown
+    members.forEach(member => {
+      if (!netBalances[member.memberId]) {
+        netBalances[member.memberId] = {
+          ...member,
           netAmount: 0,
         };
-        netBalances[paidById].netAmount -= amount;
       }
     });
 
-    const result = Object.values(netBalances);
+    // 6. Convert balances to array
+    const memberContributions = Object.values(netBalances);
 
-    res.status(200).json({ memberContributions: result });
+    // 7. Send response
+    res.status(200).json({
+      memberContributions,
+      myNetAmount: myNetTotal,
+    });
   } catch (err) {
-    console.error('Error in fetchMemberContri:', err.message);
+    console.error("Error in fetchMemberContri:", err.message);
     res.status(500).json({ message: err.message });
   }
 };
