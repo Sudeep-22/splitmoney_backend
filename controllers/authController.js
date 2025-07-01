@@ -34,8 +34,8 @@ exports.register = async (req, res) => {
     // Set refresh token as HTTP-only cookie
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: "None",
+      secure: true, // ✅ required for cross-site cookies
+      sameSite: "None", // ✅ must be None for cross-origin
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
@@ -65,8 +65,8 @@ exports.login = async (req, res) => {
     // Set refresh token in cookie
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      secure: true, // ✅ required for cross-site cookies
+      sameSite: "None", // ✅ must be None for cross-origin
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -80,17 +80,19 @@ exports.login = async (req, res) => {
 };
 
 // Refresh access token
-exports.refreshAccessToken = async(req, res) => {
+exports.refreshAccessToken = async (req, res) => {
   const token = req.cookies.refreshToken;
-   if (!token) {
+  if (!token) {
     return res.status(401).json({ message: 'No refresh token found' }); // ✅ Return JSON
   } // Unauthorized
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.userId).select('name');
     const accessToken = generateAccessToken(decoded.userId);
-    res.json({ accessToken,
-      user: { id: user._id, name: user.name }, });
+    res.json({
+      accessToken,
+      user: { id: user._id, name: user.name },
+    });
   } catch (err) {
     return res.sendStatus(403).json({ message: 'Invalid or expired refresh token' }); // Forbidden
   }
@@ -100,8 +102,8 @@ exports.refreshAccessToken = async(req, res) => {
 exports.logoutUser = (req, res) => {
   res.clearCookie('refreshToken', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    secure: true,
+    sameSite: "None",
   });
   res.status(200).json({ message: 'Logged out successfully' });
 };
@@ -133,8 +135,8 @@ exports.deleteUser = async (req, res) => {
     // 4. Clear cookie and respond
     res.clearCookie('refreshToken', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: true, // ✅ required for cross-site cookies
+      sameSite: "None", // ✅ must be None for cross-origin
     });
 
     res.status(200).json({ message: 'User deleted successfully and references nullified' });
