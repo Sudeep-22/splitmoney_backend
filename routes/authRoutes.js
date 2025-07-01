@@ -8,6 +8,6 @@ router.post('/login', login);
 router.post('/refreshToken', refreshAccessToken);
 router.post('/logOut', logoutUser);
 router.delete('/deleteUser',authMiddleware, deleteUser);
-router.get('/fetchAllUsers',authMiddleware, fetchAllUsers);
+router.post('/fetchAllUsers',authMiddleware, fetchAllUsers);
 
 module.exports = router;

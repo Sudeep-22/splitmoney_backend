@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const IndivisualExpenseContribution = require('../models/IndivisualExpenseContribution');
 const Expense = require('../models/Expense');
+const GroupUser = require('../models/GroupUser');
 
 // Helper functions
 const generateAccessToken = (userId) => {
@@ -143,11 +144,22 @@ exports.deleteUser = async (req, res) => {
   }
 };
 
-exports.fetchAllUsers = async(req, res) => {
+exports.fetchAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select('name');
-    res.status(200).json({ users }); // e.g., [{ _id: ..., name: 'Sudeep' }, ...]
+    const { groupId } = req.body;
+
+    if (!groupId) return res.status(400).json({ message: "Group ID is required" });
+
+    // Step 1: Get user IDs already in the group
+    const groupUsers = await GroupUser.find({ group: groupId }).select("user");
+    const userIdsInGroup = groupUsers.map((gu) => gu.user.toString());
+
+    // Step 2: Get users NOT in the group
+    const users = await User.find({ _id: { $nin: userIdsInGroup } }).select("name");
+
+    res.status(200).json({ users });
   } catch (err) {
+    console.error("Error fetching users:", err);
     res.status(500).json({ message: err.message });
   }
 };
