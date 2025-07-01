@@ -12,7 +12,7 @@ const cookieParser = require('cookie-parser');
 // Add this before your routes
 app.use(cookieParser());
 app.use(cors({
-  origin: 'https://splitmoney-frontend.vercel.app' || 'http://localhost:5173', 
+  origin: 'https://splitmoney-frontend.vercel.app', 
   // origin:  'http://localhost:5173', 
   credentials: true,
 }));

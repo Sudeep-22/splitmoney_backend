@@ -94,7 +94,7 @@ exports.refreshAccessToken = async (req, res) => {
       user: { id: user._id, name: user.name },
     });
   } catch (err) {
-    return res.sendStatus(403).json({ message: 'Invalid or expired refresh token' }); // Forbidden
+    return res.status(403).json({ message: 'Invalid or expired refresh token' }); // Forbidden
   }
 };
 
