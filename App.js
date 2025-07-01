@@ -13,6 +13,7 @@ const cookieParser = require('cookie-parser');
 app.use(cookieParser());
 app.use(cors({
   origin: 'https://splitmoney-frontend.vercel.app' || 'http://localhost:5173', 
+  // origin:  'http://localhost:5173', 
   credentials: true,
 }));
 
