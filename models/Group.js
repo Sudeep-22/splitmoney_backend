@@ -4,8 +4,7 @@ const GroupSchema = new Schema({
     title:{
         type: String,
         required: true,
-        unique: true,
-        minlength: 3
+        unique: true
     },
     description:{
         type:String,
